@@ -19,6 +19,7 @@ Server defaults:
 - Endpoints:
 	- `GET /`
 	- `GET /healthz`
+	- `GET /query?query=up&prom_url=http://localhost:9090`
 
 Optional flags:
 
@@ -43,6 +44,15 @@ Common flags:
 - `--path`: request path (default: `/healthz`)
 - `--insecure`: skip TLS verification for self-signed certs (default: `true`)
 - `--timeout`: request timeout (default: `5s`)
+
+### Query handler
+
+The `GET /query` handler executes a PromQL query against a Prometheus endpoint and returns parsed results as JSON.
+
+Query parameters:
+
+- `query`: PromQL expression (default: `up`)
+- `prom_url`: Prometheus base URL (default: `http://localhost:9090`)
 
 ## Build Docker Image
 

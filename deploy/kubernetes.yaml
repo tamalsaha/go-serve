@@ -5,6 +5,44 @@ metadata:
   labels:
     app.kubernetes.io/name: go-serve
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: go-serve-cluster-monitoring-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-monitoring-view
+subjects:
+- kind: ServiceAccount
+  name: go-serve
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: go-serve-secret-reader
+  namespace: openshift-service-ca
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["signing-key"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: go-serve-secret-reader-binding
+  namespace: openshift-service-ca
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: go-serve-secret-reader
+subjects:
+- kind: ServiceAccount
+  name: go-serve
+  namespace: default
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,6 +60,7 @@ spec:
         app.kubernetes.io/name: go-serve
     spec:
       serviceAccountName: go-serve
+      automountServiceAccountToken: true
       containers:
       - name: go-serve
         image: ghcr.io/appscodeci/go-serve:latest
