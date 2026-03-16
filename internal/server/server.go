@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -42,6 +43,7 @@ func Run(addr string) error {
 		_, _ = w.Write([]byte("ok\n"))
 	})
 	mux.HandleFunc("/query", queryHandler)
+	mux.HandleFunc("/external-query", externalQueryHandler)
 
 	tlsConfig := &tls.Config{
 		MinVersion:   tls.VersionTLS12,
@@ -93,7 +95,45 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	cfg := ctrl.GetConfigOrDie()
 
-	promConfig, err := ToPrometheusConfigFromServiceAccount(cfg,
+	promConfig, err := ToInternalPrometheusConfig(cfg,
+		ServiceReference{
+			Scheme:    "https",
+			Namespace: "openshift-monitoring",
+			Name:      "thanos-querier",
+			Port:      9091,
+		})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("create Prometheus config: %v", err), http.StatusBadRequest)
+		return
+	}
+	pc, err := promConfig.NewPrometheusClient()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("create Prometheus client: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	res, err := getPromQueryResult(promv1.NewAPI(pc), query)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("query Prometheus: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		http.Error(w, fmt.Sprintf("encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+func externalQueryHandler(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("query")
+	if query == "" {
+		query = "up"
+	}
+
+	cfg := ctrl.GetConfigOrDie()
+
+	promConfig, err := ToExternalPrometheusConfig(cfg,
 		ServiceReference{
 			Scheme:    "https",
 			Namespace: "openshift-monitoring",
@@ -169,7 +209,7 @@ type ServiceReference struct {
 	Port      int
 }
 
-func ToPrometheusConfigFromServiceAccount(cfg *rest.Config, ref ServiceReference) (*PrometheusConfig, error) {
+func ToInternalPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*PrometheusConfig, error) {
 	// Load CA from the 'signing-key' secret in 'openshift-service-ca' namespace
 	// and extract the 'tls.crt' key
 	tokenFile := "/var/run/secrets/kubernetes.io/serviceaccount/token"
@@ -210,6 +250,38 @@ func ToPrometheusConfigFromServiceAccount(cfg *rest.Config, ref ServiceReference
 		TLSConfig: prom_config.TLSConfig{
 			CAFile:             caFile.Name(),
 			ServerName:         fmt.Sprintf("%s.%s.svc", ref.Name, ref.Namespace),
+			InsecureSkipVerify: false,
+		},
+	}, nil
+}
+
+func ToExternalPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*PrometheusConfig, error) {
+	// Load CA from the 'signing-key' secret in 'openshift-service-ca' namespace
+	// and extract the 'tls.crt' key
+	tokenFile := "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+	tokenData, err := os.ReadFile(tokenFile)
+	if err != nil {
+		return nil, fmt.Errorf("read service account token: %w", err)
+	}
+
+	u, err := url.Parse(cfg.Host)
+	if err != nil {
+		return nil, fmt.Errorf("parse host: %w", err)
+	}
+	// Addr:        "https://thanos-querier-openshift-monitoring.apps.pmmswrjj775acdea26.centralindia.aroapp.io",
+	addr := u.Hostname()
+	if after, ok := strings.CutPrefix(addr, "api."); ok {
+		addr = after
+	}
+	addr = fmt.Sprintf("https://%s-%s.apps.%s", ref.Name, ref.Namespace, addr)
+
+	return &PrometheusConfig{
+		Addr:        addr,
+		BearerToken: string(tokenData),
+		TLSConfig: prom_config.TLSConfig{
+			CAFile: "",
+			// ServerName:         fmt.Sprintf("%s.%s.svc", ref.Name, ref.Namespace),
 			InsecureSkipVerify: false,
 		},
 	}, nil

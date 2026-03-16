@@ -14,7 +14,7 @@ type PrometheusConfig struct {
 	// The address where metrics will be sent
 	Addr string
 	// The HTTP basic authentication credentials for the targets.
-	BasicAuth BasicAuth `yaml:"basic_auth,omitempty" json:"basic_auth,omitempty"`
+	BasicAuth BasicAuth `yaml:"basic_auth,omitempty" json:"basic_auth"`
 	// The bearer token for the targets. Deprecated in favour of
 	// Authorization.Credentials.
 	BearerToken string `yaml:"bearer_token,omitempty" json:"bearer_token,omitempty"`
@@ -24,7 +24,7 @@ type PrometheusConfig struct {
 	// HTTP proxy server to use to connect to the targets.
 	ProxyURL string `yaml:"proxy_url,omitempty" json:"proxy_url,omitempty"`
 	// TLSConfig to use to connect to the targets.
-	TLSConfig prom_config.TLSConfig `yaml:"tls_config,omitempty" json:"tls_config,omitempty"`
+	TLSConfig prom_config.TLSConfig `yaml:"tls_config,omitempty" json:"tls_config"`
 }
 
 // BasicAuth contains basic HTTP authentication credentials.
