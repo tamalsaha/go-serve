@@ -224,14 +224,14 @@ func ToInternalPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*Promet
 		return nil, fmt.Errorf("create kubernetes client: %w", err)
 	}
 
-	secret, err := clientset.CoreV1().Secrets("openshift-service-ca").Get(context.Background(), "signing-key", metav1.GetOptions{})
+	cm, err := clientset.CoreV1().ConfigMaps("kube-public").Get(context.Background(), "openshift-service-ca.crt", metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("get signing-key secret: %w", err)
+		return nil, fmt.Errorf("get openshift-service-ca.crt configmap: %w", err)
 	}
 
-	caData, ok := secret.Data["tls.crt"]
+	caData, ok := cm.Data["service-ca.crt"]
 	if !ok {
-		return nil, fmt.Errorf("tls.crt key not found in signing-key secret")
+		return nil, fmt.Errorf("service-ca.crt key not found in configmap")
 	}
 
 	// Write CA data to a temp file and set CAFile
@@ -240,7 +240,7 @@ func ToInternalPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*Promet
 		return nil, fmt.Errorf("create temp ca file: %w", err)
 	}
 	defer caFile.Close()
-	if _, err := caFile.Write(caData); err != nil {
+	if _, err := caFile.Write([]byte(caData)); err != nil {
 		return nil, fmt.Errorf("write ca data: %w", err)
 	}
 

@@ -21,23 +21,23 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: go-serve-secret-reader
-  namespace: openshift-service-ca
+  name: go-serve-configmap-reader
+  namespace: kube-public
 rules:
 - apiGroups: [""]
-  resources: ["secrets"]
-  resourceNames: ["signing-key"]
+  resources: ["configmaps"]
+  resourceNames: ["openshift-service-ca.crt"]
   verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: go-serve-secret-reader-binding
-  namespace: openshift-service-ca
+  name: go-serve-configmap-reader-binding
+  namespace: kube-public
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: go-serve-secret-reader
+  name: go-serve-configmap-reader
 subjects:
 - kind: ServiceAccount
   name: go-serve
