@@ -14,7 +14,6 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	rootCmd.AddCommand(newRunCmd())
-	rootCmd.AddCommand(newCheckCmd())
 
 	return rootCmd
 }
