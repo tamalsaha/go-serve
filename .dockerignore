@@ -1,0 +1,7 @@
+.git
+.github
+.vscode
+bin
+out
+dist
+*.md
