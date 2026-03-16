@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -18,6 +17,9 @@ import (
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	prom_config "github.com/prometheus/common/config"
 	"github.com/tamalsaha/go-serve/internal/tlsutil"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -265,19 +267,28 @@ func ToExternalPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*Promet
 		return nil, fmt.Errorf("read service account token: %w", err)
 	}
 
-	u, err := url.Parse(cfg.Host)
+	dyn, err := dynamic.NewForConfig(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("parse host: %w", err)
+		return nil, fmt.Errorf("create dynamic client: %w", err)
 	}
-	// Addr:        "https://thanos-querier-openshift-monitoring.apps.pmmswrjj775acdea26.centralindia.aroapp.io",
-	addr := u.Hostname()
-	if after, ok := strings.CutPrefix(addr, "api."); ok {
-		addr = after
+	gvr := schema.GroupVersionResource{
+		Group:    "operator.openshift.io",
+		Version:  "v1",
+		Resource: "ingresscontrollers",
 	}
-	addr = fmt.Sprintf("https://%s-%s.apps.%s", ref.Name, ref.Namespace, addr)
-
+	uobj, err := dyn.Resource(gvr).Namespace("openshift-ingress-operator").Get(context.Background(), "default", metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get openshift-ingress-operator default: %w", err)
+	}
+	domain, ok, err := unstructured.NestedString(uobj.UnstructuredContent(), "status", "domain")
+	if err != nil {
+		return nil, fmt.Errorf("get openshift-ingress-operator domain: %w", err)
+	}
+	if !ok || domain == "" {
+		return nil, fmt.Errorf("openshift-ingress-operator domain not found in status")
+	}
 	return &PrometheusConfig{
-		Addr:        addr,
+		Addr:        fmt.Sprintf("https://%s-%s.%s", ref.Name, ref.Namespace, domain),
 		BearerToken: string(tokenData),
 		TLSConfig: prom_config.TLSConfig{
 			CAFile: "",
